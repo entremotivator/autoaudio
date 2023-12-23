@@ -4,7 +4,7 @@ from pathlib import Path
 from zipfile import ZipFile 
 from dotenv import load_dotenv
 
-load_dotenv()
+
 
 st.sidebar.header('API Configuration')
 api_key = st.sidebar.text_input('Enter your OpenAI API key:', type='password')
