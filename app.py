@@ -1,14 +1,16 @@
 import streamlit as st
+import openai
+from pytube import YouTube
 import os
 from pathlib import Path
+import shutil
+import whisper
 from dotenv import load_dotenv
 from zipfile import ZipFile 
 
 load_dotenv()
 
-# Ask the user to input their API key
-openai_api_key = st.text_input('Enter your OpenAI API Key:')
-openai.api_key = openai_api_key
+openai.api_key = os.getenv("OPENAI_API_KEY")
 
 @st.cache
 def load_model():
@@ -49,6 +51,7 @@ def text_to_news_article(text):
     )
     return response['choices'][0]['text']
 
+
 st.markdown('# 📝 **News Article Generator App**')
 
 st.header('Input the Video URL')
@@ -65,7 +68,7 @@ if st.checkbox('Start Analysis'):
     result = text_to_news_article(transcript)
     st.success(result)
     
-    # save the files
+    #save the files
     transcript_txt = open('transcript.txt', 'w')
     transcript_txt.write(transcript)
     transcript_txt.close()  
