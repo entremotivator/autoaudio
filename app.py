@@ -1,22 +1,26 @@
 import streamlit as st
 import os
 from pathlib import Path
-from zipfile import ZipFile 
+from zipfile import ZipFile
+from dotenv import load_dotenv
+from pytube import YouTube
+import openai
 
+# Load environment variables from .env file
+load_dotenv()
 
-
-
-st.sidebar.header('API Configuration')
+# Set the OpenAI API key
 api_key = st.sidebar.text_input('Enter your OpenAI API key:', type='password')
 
+# Check if API key is provided
 if not api_key:
-    st.warning('Please enter your OpenAI API key in the sidebar.')
-
+    st.sidebar.warning('Please enter your OpenAI API key in the sidebar.')
 else:
     openai.api_key = api_key  # Set the API key for OpenAI
 
     @st.cache
     def load_model():
+        # Replace 'whisper' with the actual library you are using for loading the model
         model = whisper.load_model("base")
         return model
 
@@ -32,8 +36,7 @@ else:
             os.remove(file_name)
             os.rename(out_file, file_name)
         audio_filename = Path(file_name).stem+'.mp3'
-        print(yt.title + " Has been successfully downloaded")
-        print(file_name)
+        st.success(yt.title + " has been successfully downloaded")
         return yt.title, audio_filename
 
     def audio_to_transcript(audio_file):
@@ -56,8 +59,10 @@ else:
 
     st.markdown('# 📝 **News Article Generator App**')
 
-    st.header('Input the Video URL')
+    st.sidebar.header('API Configuration')
+    st.sidebar.info("Provide your OpenAI API key to use the app.")
 
+    st.header('Input the Video URL')
     url_link = st.text_input('Enter URL of YouTube video:')
 
     if st.checkbox('Start Analysis'):
@@ -91,3 +96,4 @@ else:
                 file_name="output.zip",
                 mime="application/zip"
             )
+
