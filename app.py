@@ -5,6 +5,8 @@ from zipfile import ZipFile
 from dotenv import load_dotenv
 from pytube import YouTube
 import openai
+# Make sure to replace 'whisper' with the actual library you are using for loading the model
+import whisper  
 
 # Load environment variables from .env file
 load_dotenv()
@@ -35,9 +37,9 @@ else:
         except WindowsError:
             os.remove(file_name)
             os.rename(out_file, file_name)
-        audio_filename = Path(file_name).stem+'.mp3'
-        st.success(yt.title + " has been successfully downloaded")
-        return yt.title, audio_filename
+        audio_filename = Path(file_name).stem + '.mp3'
+        st.success(yt.title() + " has been successfully downloaded")  # Fix: Use yt.title()
+        return yt.title(), audio_filename  # Fix: Use yt.title()
 
     def audio_to_transcript(audio_file):
         model = load_model()
@@ -48,7 +50,7 @@ else:
     def text_to_news_article(text):
         response = openai.Completion.create(
             model="text-davinci-003",
-            prompt="Write a news article in 500 words from the below text:\n"+text,
+            prompt="Write a news article in 500 words from the below text:\n" + text,
             temperature=0.7,
             max_tokens=600,
             top_p=1,
@@ -74,21 +76,21 @@ else:
         st.header("News Article")
         result = text_to_news_article(transcript)
         st.success(result)
-        
+
         # Save the files
         transcript_txt = open('transcript.txt', 'w')
         transcript_txt.write(transcript)
-        transcript_txt.close()  
-        
+        transcript_txt.close()
+
         article_txt = open('article.txt', 'w')
-        article_txt.write(result) 
-        article_txt.close() 
-        
+        article_txt.write(result)
+        article_txt.close()
+
         zip_file = ZipFile('output.zip', 'w')
         zip_file.write('transcript.txt')
         zip_file.write('article.txt')
         zip_file.close()
-        
+
         with open("output.zip", "rb") as zip_download:
             btn = st.download_button(
                 label="Download ZIP",
@@ -96,4 +98,3 @@ else:
                 file_name="output.zip",
                 mime="application/zip"
             )
-
