@@ -1,5 +1,5 @@
 streamlit
-pytube
 openai-whisper
 openai
-
+pytube==11.0.1
+python-dotenv==0.19.0
