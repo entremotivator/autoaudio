@@ -3,14 +3,14 @@ import openai
 from pytube import YouTube
 import os
 from pathlib import Path
-import shutil
-import whisper
-from dotenv import load_dotenv
 from zipfile import ZipFile 
+from dotenv import load_dotenv
 
 load_dotenv()
 
-openai.api_key = os.getenv("OPENAI_API_KEY")
+st.sidebar.header('API Configuration')
+api_key = st.sidebar.text_input('Enter your OpenAI API key:', type='password')
+openai.api_key = api_key  # Set the API key for OpenAI
 
 @st.cache
 def load_model():
@@ -41,16 +41,15 @@ def audio_to_transcript(audio_file):
 
 def text_to_news_article(text):
     response = openai.Completion.create(
-    model="text-davinci-003",
-    prompt="Write a news article in 500 words from the below text:\n"+text,
-    temperature=0.7,
-    max_tokens=600,
-    top_p=1,
-    frequency_penalty=0,
-    presence_penalty=0
+        model="text-davinci-003",
+        prompt="Write a news article in 500 words from the below text:\n"+text,
+        temperature=0.7,
+        max_tokens=600,
+        top_p=1,
+        frequency_penalty=0,
+        presence_penalty=0
     )
     return response['choices'][0]['text']
-
 
 st.markdown('# 📝 **News Article Generator App**')
 
@@ -68,7 +67,7 @@ if st.checkbox('Start Analysis'):
     result = text_to_news_article(transcript)
     st.success(result)
     
-    #save the files
+    # Save the files
     transcript_txt = open('transcript.txt', 'w')
     transcript_txt.write(transcript)
     transcript_txt.close()  
