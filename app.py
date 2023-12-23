@@ -2,14 +2,11 @@ import streamlit as st
 import os
 from pathlib import Path
 from zipfile import ZipFile
-from dotenv import load_dotenv
 from pytube import YouTube
 import openai
 # Make sure to replace 'whisper' with the actual library you are using for loading the model
 import whisper  
 
-# Load environment variables from .env file
-load_dotenv()
 
 # Set the OpenAI API key
 api_key = st.sidebar.text_input('Enter your OpenAI API key:', type='password')
