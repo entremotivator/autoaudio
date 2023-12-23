@@ -9,80 +9,99 @@ import whisper
 # Load OpenAI API key from the Streamlit sidebar
 openai.api_key = st.sidebar.text_input('Enter OpenAI API Key', type='password')
 
+# Define a constant for the OpenAI GPT model name
+NEWS_MODEL_NAME = "text-davinci-003"
+
 @st.cache
 def load_model():
     model = whisper.load_model("base")
     return model
 
 def save_audio(url):
-    yt = YouTube(url)
-    video = yt.streams.filter(only_audio=True).first()
-    out_file = video.download()
-    base, ext = os.path.splitext(out_file)
-    file_name = base + '.mp3'
     try:
+        yt = YouTube(url)
+        st.info("Downloading audio from the YouTube video...")
+        video = yt.streams.filter(only_audio=True).first()
+        out_file = video.download()
+        base, ext = os.path.splitext(out_file)
+        file_name = base + '.mp3'
         os.rename(out_file, file_name)
-    except WindowsError:
-        os.remove(file_name)
-        os.rename(out_file, file_name)
-    audio_filename = Path(file_name).stem+'.mp3'
-    print(yt.title + " Has been successfully downloaded")
-    print(file_name)
-    return yt.title, audio_filename
+        audio_filename = Path(file_name).stem+'.mp3'
+        st.success(f"Audio downloaded successfully: {audio_filename}")
+        return yt.title, audio_filename
+    except Exception as e:
+        st.error(f"Error downloading audio: {e}")
+        return None, None
 
 def audio_to_transcript(audio_file):
     model = load_model()
+    st.info("Transcribing audio...")
     result = model.transcribe(audio_file)
     transcript = result["text"]
     return transcript
 
 def text_to_news_article(text):
-    response = openai.Completion.create(
-        model="text-davinci-003",
-        prompt="Write a news article in 500 words from the below text:\n"+text,
-        temperature=0.7,
-        max_tokens=600,
-        top_p=1,
-        frequency_penalty=0,
-        presence_penalty=0
-    )
-    return response['choices'][0]['text']
+    try:
+        st.info("Generating news article...")
+        response = openai.Completion.create(
+            model=NEWS_MODEL_NAME,
+            prompt="Write a news article in 500 words from the below text:\n"+text,
+            temperature=0.7,
+            max_tokens=600,
+            top_p=1,
+            frequency_penalty=0,
+            presence_penalty=0
+        )
+        return response['choices'][0]['text']
+    except Exception as e:
+        st.error(f"Error generating news article: {e}")
+        return None
 
+# Main Streamlit app
 st.sidebar.markdown('# 🤖 **OpenAI GPT API Key**')
 st.markdown('# 📝 **News Article Generator App**')
-
 st.header('Input the Video URL')
 
 url_link = st.text_input('Enter URL of YouTube video:')
 
 if st.checkbox('Start Analysis'):
     video_title, audio_filename = save_audio(url_link)
-    st.audio(audio_filename)
-    transcript = audio_to_transcript(audio_filename)
-    st.header("Transcript are getting generated...")
-    st.success(transcript)
-    st.header("News Article")
-    result = text_to_news_article(transcript)
-    st.success(result)
     
-    # Save the files
-    transcript_txt = open('transcript.txt', 'w')
-    transcript_txt.write(transcript)
-    transcript_txt.close()  
+    if audio_filename:
+        st.audio(audio_filename)
+        transcript = audio_to_transcript(audio_filename)
+        
+        st.header("Transcript are getting generated...")
+        st.success(transcript)
+        
+        st.header("News Article")
+        result = text_to_news_article(transcript)
+        
+        if result:
+            st.success(result)
+            
+            # Save the files
+            transcript_txt = open('transcript.txt', 'w')
+            transcript_txt.write(transcript)
+            transcript_txt.close()  
     
-    article_txt = open('article.txt', 'w')
-    article_txt.write(result) 
-    article_txt.close() 
+            article_txt = open('article.txt', 'w')
+            article_txt.write(result) 
+            article_txt.close() 
     
-    zip_file = ZipFile('output.zip', 'w')
-    zip_file.write('transcript.txt')
-    zip_file.write('article.txt')
-    zip_file.close()
+            zip_file = ZipFile('output.zip', 'w')
+            zip_file.write('transcript.txt')
+            zip_file.write('article.txt')
+            zip_file.close()
     
-    with open("output.zip", "rb") as zip_download:
-        btn = st.download_button(
-            label="Download ZIP",
-            data=zip_download,
-            file_name="output.zip",
-            mime="application/zip"
-        )
+            # Remove temporary files
+            os.remove('transcript.txt')
+            os.remove('article.txt')
+    
+            with open("output.zip", "rb") as zip_download:
+                btn = st.download_button(
+                    label="Download ZIP",
+                    data=zip_download,
+                    file_name="output.zip",
+                    mime="application/zip"
+                )
