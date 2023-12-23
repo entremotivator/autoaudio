@@ -2,7 +2,6 @@ import streamlit as st
 import os
 from pathlib import Path
 from zipfile import ZipFile
-from pytube import YouTube
 import openai
 # Make sure to replace 'whisper' with the actual library you are using for loading the model
 import whisper  
