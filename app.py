@@ -1,107 +1,149 @@
 import streamlit as st
-import openai
-from pytube import YouTube
+import websockets
+import asyncio
+import base64
+import json
+import pyaudio
 import os
 from pathlib import Path
-from zipfile import ZipFile
-import whisper
 
-# Load OpenAI API key from the Streamlit sidebar
-openai.api_key = st.sidebar.text_input('Enter OpenAI API Key', type='password')
+# Streamlit app title and description
+st.title('🎙️ Real-Time Transcription App')
+st.markdown('''
+    This Streamlit app uses the AssemblyAI API to perform real-time transcription.
 
-# Define a constant for the OpenAI GPT model name
-NEWS_MODEL_NAME = "text-davinci-003"
+    Libraries used:
+    - `streamlit` - web framework
+    - `pyaudio` - a Python library providing bindings to PortAudio (cross-platform audio processing library)
+    - `websockets` - allows interaction with the API
+    - `asyncio` - allows concurrent input/output processing
+    - `base64` - encode/decode audio data
+    - `json` - allows reading of AssemblyAI audio output in JSON format
+''')
 
-@st.cache
-def load_model():
-    model = whisper.load_model("base")
-    return model
+# User input for API key
+api_key = st.text_input('Enter your AssemblyAI API Key:')
+if not api_key:
+    st.warning('Please enter your AssemblyAI API Key.')
 
-def save_audio(url):
-    try:
-        yt = YouTube(url)
-        st.info("Downloading audio from the YouTube video...")
-        video = yt.streams.filter(only_audio=True).first()
-        out_file = video.download()
-        base, ext = os.path.splitext(out_file)
-        file_name = base + '.mp3'
-        os.rename(out_file, file_name)
-        audio_filename = Path(file_name).stem+'.mp3'
-        st.success(f"Audio downloaded successfully: {audio_filename}")
-        return yt.title, audio_filename
-    except Exception as e:
-        st.error(f"Error downloading audio: {e}")
-        return None, None
+# Audio parameters sidebar
+st.sidebar.header('Audio Parameters')
+FRAMES_PER_BUFFER = int(st.sidebar.text_input('Frames per buffer', 3200))
+FORMAT = pyaudio.paInt16
+CHANNELS = 1
+RATE = int(st.sidebar.text_input('Rate', 16000))
+p = pyaudio.PyAudio()
 
-def audio_to_transcript(audio_file):
-    model = load_model()
-    st.info("Transcribing audio...")
-    result = model.transcribe(audio_file)
-    transcript = result["text"]
-    return transcript
+# Open audio stream with specified parameters
+stream = p.open(
+   format=FORMAT,
+   channels=CHANNELS,
+   rate=RATE,
+   input=True,
+   frames_per_buffer=FRAMES_PER_BUFFER
+)
 
-def text_to_news_article(text):
-    try:
-        st.info("Generating news article...")
-        response = openai.Completion.create(
-            model=NEWS_MODEL_NAME,
-            prompt="Write a news article in 500 words from the below text:\n"+text,
-            temperature=0.7,
-            max_tokens=600,
-            top_p=1,
-            frequency_penalty=0,
-            presence_penalty=0
-        )
-        return response['choices'][0]['text']
-    except Exception as e:
-        st.error(f"Error generating news article: {e}")
-        return None
+# Session state
+if 'text' not in st.session_state:
+    st.session_state['text'] = 'Listening...'
+    st.session_state['run'] = False
 
-# Main Streamlit app
-st.sidebar.markdown('# 🤖 **OpenAI GPT API Key**')
-st.markdown('# 📝 **News Article Generator App**')
-st.header('Input the Video URL')
+# Start and stop listening functions
+def start_listening():
+    st.session_state['run'] = True
 
-url_link = st.text_input('Enter URL of YouTube video:')
+def stop_listening():
+    st.session_state['run'] = False
 
-if st.checkbox('Start Analysis'):
-    video_title, audio_filename = save_audio(url_link)
-    
-    if audio_filename:
-        st.audio(audio_filename)
-        transcript = audio_to_transcript(audio_filename)
-        
-        st.header("Transcript are getting generated...")
-        st.success(transcript)
-        
-        st.header("News Article")
-        result = text_to_news_article(transcript)
-        
-        if result:
-            st.success(result)
-            
-            # Save the files
-            transcript_txt = open('transcript.txt', 'w')
-            transcript_txt.write(transcript)
-            transcript_txt.close()  
-    
-            article_txt = open('article.txt', 'w')
-            article_txt.write(result) 
-            article_txt.close() 
-    
-            zip_file = ZipFile('output.zip', 'w')
-            zip_file.write('transcript.txt')
-            zip_file.write('article.txt')
-            zip_file.close()
-    
-            # Remove temporary files
-            os.remove('transcript.txt')
-            os.remove('article.txt')
-    
-            with open("output.zip", "rb") as zip_download:
-                btn = st.download_button(
-                    label="Download ZIP",
-                    data=zip_download,
-                    file_name="output.zip",
-                    mime="application/zip"
-                )
+# Download transcription function
+def download_transcription():
+    read_txt = open('transcription.txt', 'r')
+    st.download_button(
+        label="Download transcription",
+        data=read_txt,
+        file_name="transcription_output.txt",
+        mime="text/plain"
+    )
+
+# Web interface frontend
+col1, col2 = st.columns(2)
+col1.button('Start', on_click=start_listening)
+col2.button('Stop', on_click=stop_listening)
+
+# Send and receive audio data through websockets
+async def send_receive():
+    if not api_key:
+        return
+
+    URL = f"wss://api.assemblyai.com/v2/realtime/ws?sample_rate={RATE}"
+
+    print(f'Connecting websocket to url {URL}')
+
+    async with websockets.connect(
+        URL,
+        extra_headers=(("Authorization", api_key),),
+        ping_interval=5,
+        ping_timeout=20
+    ) as _ws:
+
+        r = await asyncio.sleep(0.1)
+        print("Receiving messages ...")
+
+        session_begins = await _ws.recv()
+        print(session_begins)
+        print("Sending messages ...")
+
+        async def send():
+            while st.session_state['run']:
+                try:
+                    data = stream.read(FRAMES_PER_BUFFER)
+                    data = base64.b64encode(data).decode("utf-8")
+                    json_data = json.dumps({"audio_data": str(data)})
+                    r = await _ws.send(json_data)
+
+                except websockets.exceptions.ConnectionClosedError as e:
+                    print(e)
+                    assert e.code == 4008
+                    break
+
+                except Exception as e:
+                    print(e)
+                    assert False, "Not a websocket 4008 error"
+
+                r = await asyncio.sleep(0.01)
+
+        # Receive transcription output
+        async def receive():
+            while st.session_state['run']:
+                try:
+                    result_str = await _ws.recv()
+                    result = json.loads(result_str)['text']
+
+                    if json.loads(result_str)['message_type'] == 'FinalTranscript':
+                        print(result)
+                        st.session_state['text'] = result
+                        st.write(st.session_state['text'])
+
+                        transcription_txt = open('transcription.txt', 'a')
+                        transcription_txt.write(st.session_state['text'])
+                        transcription_txt.write(' ')
+                        transcription_txt.close()
+
+                except websockets.exceptions.ConnectionClosedError as e:
+                    print(e)
+                    assert e.code == 4008
+                    break
+
+                except Exception as e:
+                    print(e)
+                    assert False, "Not a websocket 4008 error"
+
+        send_result, receive_result = await asyncio.gather(send(), receive())
+
+asyncio.run(send_receive())
+
+# Check if the transcription file exists, and if so, display download button
+if Path('transcription.txt').is_file():
+    st.markdown('### Download')
+    download_transcription()
+    os.remove('transcription.txt')
