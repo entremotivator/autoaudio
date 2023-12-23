@@ -1,5 +1,4 @@
 import streamlit as st
-import openai
 from pytube import YouTube
 import os
 from pathlib import Path
