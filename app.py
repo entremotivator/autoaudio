@@ -1,5 +1,4 @@
 import streamlit as st
-import pyaudio
 import numpy as np
 import wave
 import io
