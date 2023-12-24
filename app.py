@@ -1,4 +1,5 @@
 import streamlit as st
+import websockets
 import asyncio
 import base64
 import json
