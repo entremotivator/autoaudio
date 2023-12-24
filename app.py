@@ -1,6 +1,7 @@
 import streamlit as st
 import numpy as np
 import wave
+import pyaudio
 import io
 import base64
 
