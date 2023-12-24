@@ -1,149 +1,40 @@
 import streamlit as st
-import websockets
-import asyncio
-import base64
-import json
 import pyaudio
-import os
-from pathlib import Path
+import numpy as np
 
-# Streamlit app title and description
-st.title('🎙️ Real-Time Transcription App')
-st.markdown('''
-    This Streamlit app uses the AssemblyAI API to perform real-time transcription.
+def main():
+    st.title("Streamlit App with PyAudio")
 
-    Libraries used:
-    - `streamlit` - web framework
-    - `pyaudio` - a Python library providing bindings to PortAudio (cross-platform audio processing library)
-    - `websockets` - allows interaction with the API
-    - `asyncio` - allows concurrent input/output processing
-    - `base64` - encode/decode audio data
-    - `json` - allows reading of AssemblyAI audio output in JSON format
-''')
+    # Function to capture audio and display a plot
+    def capture_audio():
+        p = pyaudio.PyAudio()
 
-# User input for API key
-api_key = st.text_input('Enter your AssemblyAI API Key:')
-if not api_key:
-    st.warning('Please enter your AssemblyAI API Key.')
+        # Open a stream
+        stream = p.open(format=pyaudio.paInt16,
+                        channels=1,
+                        rate=44100,
+                        input=True,
+                        frames_per_buffer=1024)
 
-# Audio parameters sidebar
-st.sidebar.header('Audio Parameters')
-FRAMES_PER_BUFFER = int(st.sidebar.text_input('Frames per buffer', 3200))
-FORMAT = pyaudio.paInt16
-CHANNELS = 1
-RATE = int(st.sidebar.text_input('Rate', 16000))
-p = pyaudio.PyAudio()
+        st.write("Listening...")
 
-# Open audio stream with specified parameters
-stream = p.open(
-   format=FORMAT,
-   channels=CHANNELS,
-   rate=RATE,
-   input=True,
-   frames_per_buffer=FRAMES_PER_BUFFER
-)
+        # Collect audio data for a few seconds
+        frames = []
+        for _ in range(5 * int(44100 / 1024)):  # Adjust the number of seconds as needed
+            data = stream.read(1024)
+            frames.append(np.frombuffer(data, dtype=np.int16))
 
-# Session state
-if 'text' not in st.session_state:
-    st.session_state['text'] = 'Listening...'
-    st.session_state['run'] = False
+        # Close the stream
+        stream.stop_stream()
+        stream.close()
+        p.terminate()
 
-# Start and stop listening functions
-def start_listening():
-    st.session_state['run'] = True
+        # Display audio plot
+        st.line_chart(np.concatenate(frames, axis=0))
 
-def stop_listening():
-    st.session_state['run'] = False
+    # Button to start capturing audio
+    if st.button("Start Audio Capture"):
+        capture_audio()
 
-# Download transcription function
-def download_transcription():
-    read_txt = open('transcription.txt', 'r')
-    st.download_button(
-        label="Download transcription",
-        data=read_txt,
-        file_name="transcription_output.txt",
-        mime="text/plain"
-    )
-
-# Web interface frontend
-col1, col2 = st.columns(2)
-col1.button('Start', on_click=start_listening)
-col2.button('Stop', on_click=stop_listening)
-
-# Send and receive audio data through websockets
-async def send_receive():
-    if not api_key:
-        return
-
-    URL = f"wss://api.assemblyai.com/v2/realtime/ws?sample_rate={RATE}"
-
-    print(f'Connecting websocket to url {URL}')
-
-    async with websockets.connect(
-        URL,
-        extra_headers=(("Authorization", api_key),),
-        ping_interval=5,
-        ping_timeout=20
-    ) as _ws:
-
-        r = await asyncio.sleep(0.1)
-        print("Receiving messages ...")
-
-        session_begins = await _ws.recv()
-        print(session_begins)
-        print("Sending messages ...")
-
-        async def send():
-            while st.session_state['run']:
-                try:
-                    data = stream.read(FRAMES_PER_BUFFER)
-                    data = base64.b64encode(data).decode("utf-8")
-                    json_data = json.dumps({"audio_data": str(data)})
-                    r = await _ws.send(json_data)
-
-                except websockets.exceptions.ConnectionClosedError as e:
-                    print(e)
-                    assert e.code == 4008
-                    break
-
-                except Exception as e:
-                    print(e)
-                    assert False, "Not a websocket 4008 error"
-
-                r = await asyncio.sleep(0.01)
-
-        # Receive transcription output
-        async def receive():
-            while st.session_state['run']:
-                try:
-                    result_str = await _ws.recv()
-                    result = json.loads(result_str)['text']
-
-                    if json.loads(result_str)['message_type'] == 'FinalTranscript':
-                        print(result)
-                        st.session_state['text'] = result
-                        st.write(st.session_state['text'])
-
-                        transcription_txt = open('transcription.txt', 'a')
-                        transcription_txt.write(st.session_state['text'])
-                        transcription_txt.write(' ')
-                        transcription_txt.close()
-
-                except websockets.exceptions.ConnectionClosedError as e:
-                    print(e)
-                    assert e.code == 4008
-                    break
-
-                except Exception as e:
-                    print(e)
-                    assert False, "Not a websocket 4008 error"
-
-        send_result, receive_result = await asyncio.gather(send(), receive())
-
-asyncio.run(send_receive())
-
-# Check if the transcription file exists, and if so, display download button
-if Path('transcription.txt').is_file():
-    st.markdown('### Download')
-    download_transcription()
-    os.remove('transcription.txt')
+if __name__ == "__main__":
+    main()
