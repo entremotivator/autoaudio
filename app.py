@@ -1,11 +1,10 @@
-import streamlit as st
+ import streamlit as st
 import asyncio
 import base64
 import json
 import pyaudio
 import os
 from pathlib import Path
-import websockets
 
 # Streamlit app title and description
 st.title('🎙️ Real-Time Transcription App')
@@ -25,11 +24,6 @@ st.markdown('''
 api_key = st.text_input('Enter your AssemblyAI API Key:')
 if not api_key:
     st.warning('Please enter your AssemblyAI API Key.')
-
-# Add file uploader for audio file
-uploaded_file = st.file_uploader("Upload an audio file", type=["wav", "mp3", "ogg"])
-if uploaded_file:
-    st.audio(uploaded_file, format="audio", start_time=0)
 
 # Audio parameters sidebar
 st.sidebar.header('Audio Parameters')
