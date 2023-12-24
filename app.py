@@ -1,7 +1,7 @@
 import streamlit as st
 import numpy as np
 import wave
-import pyaudio  # Add this line for PyAudio
+import speech_recognition as sr
 import io
 import base64
 
@@ -10,45 +10,33 @@ def main():
 
     # Function to capture audio and display a plot
     def capture_audio():
-        p = pyaudio.PyAudio()
-
-        # Open a stream
-        stream = p.open(format=pyaudio.paInt16,
-                        channels=1,
-                        rate=44100,
-                        input=True,
-                        frames_per_buffer=1024)
+        recognizer = sr.Recognizer()
 
         st.write("Recording...")
 
-        # Collect audio data for a few seconds
-        frames = []
-        for _ in range(5 * int(44100 / 1024)):  # Adjust the number of seconds as needed
-            data = stream.read(1024)
-            frames.append(np.frombuffer(data, dtype=np.int16))
-
-        # Close the stream
-        stream.stop_stream()
-        stream.close()
-        p.terminate()
+        # Use the default microphone as the audio source
+        with sr.Microphone() as source:
+            audio_data = recognizer.listen(source, timeout=5)
 
         st.write("Recording complete!")
 
-        # Display audio plot
-        st.line_chart(np.concatenate(frames, axis=0))
-
         # Save the recorded audio to a WAV file
-        save_audio(frames)
+        save_audio(audio_data)
+
+        # Convert the audio data to text using SpeechRecognition
+        try:
+            text = recognizer.recognize_google(audio_data)
+            st.write("Transcription:")
+            st.write(text)
+        except sr.UnknownValueError:
+            st.write("Speech Recognition could not understand audio")
+        except sr.RequestError as e:
+            st.write(f"Could not request results from Google Speech Recognition service; {e}")
 
     # Function to save recorded audio to a WAV file
-    def save_audio(frames):
-        p = pyaudio.PyAudio()
-        wf = wave.open("recorded_audio.wav", "wb")
-        wf.setnchannels(1)
-        wf.setsampwidth(p.get_sample_size(pyaudio.paInt16))
-        wf.setframerate(44100)
-        wf.writeframes(b"".join(frames))
-        wf.close()
+    def save_audio(audio_data):
+        with open("recorded_audio.wav", "wb") as audio_file:
+            audio_file.write(audio_data.get_wav_data())
 
         st.write("Audio saved to recorded_audio.wav")
 
